@@ -1,0 +1,60 @@
+name: Deploy to EKS via GitOps
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout service code
+    - name: Checkout service repository
+      uses: actions/checkout@v3
+
+    # 2. Configure AWS Credentials
+    - name: Configure AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2
+
+    # 3. Login to Amazon ECR
+    - name: Login to ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # 4. Build Docker Image
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ secrets.AWS_ECR_REGISTRY }}/${{ github.event.repository.name }}:latest .
+
+    # 5. Push Docker Image
+    - name: Push image to ECR
+      run: |
+        docker push ${{ secrets.AWS_ECR_REGISTRY }}/${{ github.event.repository.name }}:latest
+
+    # # 6. Checkout GitOps repo
+    # - name: Checkout GitOps repository
+    #   uses: actions/checkout@v3
+    #   with:
+    #     repository: ysheep0906/gitops
+    #     ssh-key: ${{ secrets.GITOPS_REPO_SSH_KEY }}
+    #     path: gitops
+
+    # # 7. Update Helm values.yaml tag
+    # - name: Update image tag in GitOps repo
+    #   run: |
+    #     sed -i "s/tag:.*/tag: \"${GITHUB_SHA}\"/" gitops/helm/${{ github.event.repository.name }}/values.yaml
+
+    # # 8. Commit and Push to GitOps repo
+    # - name: Commit & Push changes
+    #   run: |
+    #     cd gitops
+    #     git config user.name "CI Bot"
+    #     git config user.email "ci@example.com"
+    #     git add .
+    #     git commit -m "Update image tag for ${{ github.event.repository.name }} to ${GITHUB_SHA}"
+    #     git push
