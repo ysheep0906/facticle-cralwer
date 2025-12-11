@@ -103,39 +103,16 @@ scheduler = BackgroundScheduler()
 if __name__ == "__main__":
     print("[info] 뉴스 크롤러 시작!")
 
-    # DB 연결 확인
     check_db_connection()
     check_elasticsearch_connection()
 
-    # 스케줄러 시작
-    fetch_news() # 바로 함수를 한 번 실행하기 위해 초기 처음에는 수동으로 바로 실행
-    scheduler.start()
-    scheduler.add_job(fetch_news, 'interval', minutes=2) # 이후 2분 간격으로 실행되도록 작업을 스케줄러에 추가
+    fetch_news()  # 딱 1번만 실행
 
-    # 뉴스 처리 워커 스레드 실행, 각자 queue에서 데이터를 가져와 처리
+    # 처리 스레드 실행
     executor = concurrent.futures.ThreadPoolExecutor(max_threads)
     for _ in range(max_threads):
         executor.submit(process_news)
 
-    # 메인 스레드 유지
-    try:
-        while True:
-            time.sleep(10)  # 프로그램 실행 지속
-    except (KeyboardInterrupt, SystemExit):
-        print("[warn] 종료 신호 감지, 뉴스 처리 중지")
-        scheduler.shutdown()
+    news_queue.join()
+    executor.shutdown(wait=True)
 
-        # Worker들에게 종료 신호 전달
-        for _ in range(max_threads):
-            news_queue.put(STOP_SIGNAL)  # Worker가 STOP_SIGNAL을 받으면 종료됨
-
-        # 모든 큐 작업이 끝날 때까지 대기
-        print("[info] 큐의 남은 작업 대기 중...")
-        news_queue.join()
-
-        # 모든 워커 스레드 종료 대기
-        print("[info] 워커 스레드 종료 대기 중...")
-        executor.shutdown(wait=True)
-
-        print("[info] 모든 작업 종료. 프로그램 종료.")
-        exit(0)  # 프로세스 종료
